@@ -1,14 +1,15 @@
 import xarray as xr
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 
 
 
-# read and open NetCDF file
-nc_file = '/Users/wangy/Documents/MACS/Thesis/variables/LCZcorine_Brussels_UrbClim_2015_01_v1.0.nc'  # 替换为你的文件路径
+# Read and open NetCDF file
+nc_file = '/Users/wangy/Documents/MACS/Thesis/variables/height_Brussels.nc'
 dataset = xr.open_dataset(nc_file)
 
-# check the structure
+# Check the structure
 print(dataset)
 
 # Get the names of all Data variables and select the first one
@@ -19,13 +20,26 @@ data = dataset[variable_name]
 
 # Plot the data
 plt.figure(figsize=(10, 6))
+
+# Set the color map
+cmap = plt.get_cmap('viridis')
+
+# For data only has 0 and 1, set the boundary
+# norm = mcolors.BoundaryNorm(boundaries=[0, 1, 2], ncolors=cmap.N)
 data_plot = data.plot(cmap='viridis')
 
-# Setting the title and axis labels
+
+
+# Set the title and axis labels
 plt.title("LCZcorine Brussels Visualization")
-plt.xlabel("Longitude")  # 自定义X轴名称
-plt.ylabel("Latitude")   # 自定义Y轴名称
+plt.xlabel("Longitude")
+plt.ylabel("Latitude")
 
 # Modify labels
-data_plot.colorbar.set_label('Measurement Unit')  # Replace with actual units
+cbar = data_plot.colorbar
+cbar.set_label('Measurement Unit')
+
+# For data only has 0 and 1, set the scale to 0 and 1
+# cbar.set_ticks([0, 1])
+# cbar.set_ticklabels(['0', '1'])
 plt.show()
