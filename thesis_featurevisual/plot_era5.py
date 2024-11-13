@@ -1,6 +1,6 @@
-import os
 import matplotlib.pyplot as plt
 import xarray as xr
+
 
 
 input = '/Users/wangy/Documents/MACS/Thesis/ERA5_variables/ERA5_Brussels_t2m_2015_01.nc'
