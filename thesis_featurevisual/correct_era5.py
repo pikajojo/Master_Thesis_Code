@@ -5,39 +5,53 @@ from matplotlib import pyplot as plt
 from scipy.interpolate import griddata
 
 
+
 # 打开NetCDF文件
 ds = xr.open_dataset('/Users/wangy/Documents/MACS/Thesis/ERA5_variables/ERA5_2015_07.nc')
-urbclim_cor = pd.read_csv('/Users/wangy/Documents/MACS/Thesis/UrbClim_data/urbclim_coordinates.csv')
-# 提取经纬度范围
-lon_min, lon_max = 4.0, 4.5
-lat_min, lat_max = 50.5, 51.0
+urbclim_cor = pd.read_csv('/Users/wangy/Documents/MACS/Thesis/UrbClim_data/Charleroi/Charleroi_urbclim_coordinates.csv',index_col=0)
+
+# extract the min and max of latitude and longitude
+
+lat_min = urbclim_cor['y'].min()
+lat_max = urbclim_cor['y'].max()
+
+lon_min = urbclim_cor['x'].min()
+lon_max = urbclim_cor['x'].max()
 
 # 选择经纬度范围
 lon_range = (ds.variables['longitude'][:] >= lon_min) & (ds.variables['longitude'][:] <= lon_max)
 lat_range = (ds.variables['latitude'][:] >= lat_min) & (ds.variables['latitude'][:] <= lat_max)
 
 # 初始化一个空的DataFrame来存放所有变量的数据
-# era5_t2m_df = pd.DataFrame()
+era5_2015_07_df = pd.DataFrame()
 
+# 遍历所有变量
+for var_name in ds.data_vars:
+    # 提取区域数据
+    var_region = ds[var_name][:, lat_range, lon_range]
 
-var_region = ds['t2m'][:, lat_range, lon_range]
+    # 将变量转换为DataArray
+    var_region_da = xr.DataArray(
+        var_region,
+        dims=["time", "latitude", "longitude"],
+        coords={
+            "time": ds.variables["time"][:],
+            "latitude": ds.variables["latitude"][lat_range],
+            "longitude": ds.variables["longitude"][lon_range]
+        }
+    )
 
-# 将变量转换为DataArray
-var_region_da = xr.DataArray(
-    var_region,
-    dims=["time", "latitude", "longitude"],
-    coords={
-        "time": ds.variables["time"][:],
-        "latitude": ds.variables["latitude"][lat_range],
-        "longitude": ds.variables["longitude"][lon_range]
-    }
-)
+    # 将DataArray转换为DataFrame，并重置索引
+    var_df = var_region_da.to_dataframe(name=var_name).reset_index()
 
-era5_t2m_df = var_region_da.to_dataframe('t2m').reset_index()
-era5_t2m_df['t2m'] = era5_t2m_df['t2m'] - 273.15
+    # 合并数据
+    if era5_2015_07_df.empty:
+        era5_2015_07_df = var_df
+    else:
+        era5_2015_07_df = era5_2015_07_df.merge(var_df, on=["time", "latitude", "longitude"], how="outer")
 
 # 查看合并后的DataFrame
-print(era5_t2m_df)
+print(era5_2015_07_df)
 
 # -----------------------------------------------#
 # interpolate the ERA5
@@ -94,59 +108,74 @@ def interpolate_by_time(era5_df, urbclim_cor):
     return final_result
 
 # 调用函数
-interpolated_era5_df = interpolate_by_time(era5_t2m_df, urbclim_cor)
+interpolated_era5_df = interpolate_by_time(era5_2015_07_df, urbclim_cor)
 
 # 查看结果
 print(interpolated_era5_df)
-
+print(interpolated_era5_df.isna().sum())
 # interpolated_era5_df.to_csv('/Users/wangy/Documents/MACS/Thesis/ERA5_variables/ERA5_2015_07_Brussels_Interpolated_final.csv', index=False)
 
-# # -----------------------------------------------#
-tem_diff_df = pd.read_csv('/Users/wangy/Documents/MACS/Thesis/ERA5_variables/ERA5_Corrected/Brussels_ERA5_tem_diff.csv')
-#
-#
-# # for ERA5 data of different month, the way to correct it is the process following:
-#
-# 计算有多少组
-num_groups = len(interpolated_era5_df) // 90601
+# -----------------------------------------------#
+tem_diff_df = pd.read_csv('/Users/wangy/Documents/MACS/Thesis/ERA5_variables/Charleroi/Charleroi_ERA5_correct_tem_diff.csv')
+print(tem_diff_df)
+print(tem_diff_df.isna().sum())
 
-# 创建一个新的列用于存储减去 tem_diff 后的结果
-interpolated_era5_df['t2m_corrected'] = interpolated_era5_df['t2m']  # 复制 t2m 列
+# # compute the group number
+# ghent 63001
+# Charleroi 40401
+num_groups = len(interpolated_era5_df) // 40401
+
+# copy t2m to a new column
+interpolated_era5_df['t2m_corrected'] = interpolated_era5_df['t2m'].copy()
+tem_diff_value = tem_diff_df.loc[:, 'tem_diff'].values
 
 # 遍历每一组，并减去对应的 tem_diff 值
 for i in range(num_groups):
     # 获取当前组的起始和结束索引
-    start_idx = i * 90601
-    end_idx = (i + 1) * 90601
-
-    # 获取对应的 tem_diff 值
-    tem_diff_value = tem_diff_df.loc[i, 'tem_diff']
-
+    start_idx = i * 40401
+    end_idx = (i + 1) * 40401
     # 对当前组进行减法操作
-    interpolated_era5_df.loc[start_idx:end_idx-1, 't2m_corrected'] -= tem_diff_value
-
-# 查看结果
+    interpolated_era5_df.loc[start_idx:end_idx-1, 't2m_corrected'] = interpolated_era5_df.loc[start_idx:end_idx-1, 't2m'] - tem_diff_value
+#
+#
+interpolated_era5_df['t2m_corrected'] -= 273.15
+# check the result
 print(interpolated_era5_df.head())
 print(interpolated_era5_df.tail())
-
-
-# interpolated_era5_df.to_csv('/Users/wangy/Documents/MACS/Thesis/ERA5_variables/ERA5_2015_07_Brussels_Interpolated_Corrected.csv', index=False)
-
-selected_data = interpolated_era5_df[interpolated_era5_df['time'] == '2015-07-01 00:00:00']
-
-# 查看结果
+#
+# check the NaN number
+print(interpolated_era5_df.isna().sum())
+#
+# # #interpolated_era5_df.to_csv('/Users/wangy/Documents/MACS/Thesis/ERA5_variables/ERA5_2015_07_Brussels_Interpolated_Corrected.csv', index=False)
+start_time = '2015-07-01 00:00:00'
+end_time = '2015-7-10 23:00:00'
+# # # # selected_data = interpolated_era5_df[(interpolated_era5_df['time'] == start_time)]
+selected_data = interpolated_era5_df[(interpolated_era5_df['time'] >= start_time) & (interpolated_era5_df['time'] <= end_time)]
+# # # # selected_data = filtered_data [(filtered_data ['time'] >= start_time) & (filtered_data['time'] <= end_time)]
+# # selected_data =selected_data.reset_index(drop=True)
+# #
+# #
 print(selected_data)
+# # interpolated_era5_df.to_csv('/Users/wangy/Documents/MACS/Thesis/ERA5_variables/ERA5_Corrected/ERA5_2015_07_Brussels_t2m_Corrected.csv')
+selected_data.to_csv('/Users/wangy/Documents/MACS/Thesis/ERA5_variables/ERA5_2015_07_01to10_Charleroi_Corrected.csv')
 
-def plot_feature(data,feature):
-  # Plot the data
-  plt.figure(figsize=(10, 8))
-  plt.scatter(data['x'], data['y'], c=data[feature], cmap='viridis',
-              marker='o', alpha=0.7)
-  plt.colorbar(label=feature)
-  plt.xlabel('Longitude (x)')
-  plt.ylabel('Latitude (y)')
-  plt.legend()
-  plt.title(f'Brussels {feature} map after correction')
-  plt.show()
 
-plot_feature(selected_data, 't2m')
+
+
+
+
+
+
+# def plot_feature(data,feature):
+#   # Plot the data
+#   plt.figure(figsize=(10, 8))
+#   plt.scatter(data['x'], data['y'], c=data[feature], cmap='viridis',
+#               marker='o', alpha=0.7, vmin=15, vmax=20)
+#   plt.colorbar(label=feature)
+#   plt.xlabel('Longitude (x)')
+#   plt.ylabel('Latitude (y)')
+#   plt.legend()
+#   plt.title(f'Brussels {feature} map after correction')
+#   plt.show()
+#
+# plot_feature(selected_data, 't2m')
