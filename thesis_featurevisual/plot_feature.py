@@ -1,45 +1,45 @@
-import xarray as xr
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
+import xarray as xr
+
+
+
+input = '/Users/wangy/Documents/MACS/Thesis/Alicante_features_regrid_merged.nc'
+output = '/Users/wangy/Documents/MACS/Thesis/ERA5_variables'
 
 
 
 
-# Read and open NetCDF file
-nc_file = '/Users/wangy/Documents/MACS/Thesis/variables/height_Brussels.nc'
-dataset = xr.open_dataset(nc_file)
-
-# Check the structure
-print(dataset)
-
-# Get the names of all Data variables and select the first one
-variable_name = list(dataset.data_vars)[0]
-
-# Read the data
-data = dataset[variable_name]
-
-# Plot the data
-plt.figure(figsize=(10, 6))
-
-# Set the color map
-cmap = plt.get_cmap('viridis')
-
-# For data only has 0 and 1, set the boundary
-# norm = mcolors.BoundaryNorm(boundaries=[0, 1, 2], ncolors=cmap.N)
-data_plot = data.plot(cmap='viridis')
+# Open the file
+dataset = xr.open_dataset(input)
+print(dataset.data_vars)
 
 
+for variable in dataset.data_vars:
 
-# Set the title and axis labels
-plt.title("LCZcorine Brussels Visualization")
-plt.xlabel("Longitude")
-plt.ylabel("Latitude")
+    # For t2m, transform it into Celsius
+    if variable == 't2m':
+        data = dataset[variable] - 273.15
+    else:
+        data = dataset[variable]
 
-# Modify labels
-cbar = data_plot.colorbar
-cbar.set_label('Measurement Unit')
+    # Calculate the average value of the time dimension
+    # mean_data = data.mean(dim='time')
 
-# For data only has 0 and 1, set the scale to 0 and 1
-# cbar.set_ticks([0, 1])
-# cbar.set_ticklabels(['0', '1'])
-plt.show()
+
+    # Plot the time-averaged variables
+    data_plot = plt.pcolormesh(data.longitude, data.latitude, data.squeeze(), cmap="viridis", shading="auto")
+    plt.colorbar()
+    plt.xlabel("Longitude")
+    plt.ylabel("Latitude")
+    plt.title(f"Alicante average {variable}")
+    plt.show()
+
+    #Save the file to the specified path, or create it if it does not exist
+    # if not os.path.exists(output):
+    #     os.makedirs(output)
+    # file_path = os.path.join(output, f'ERA5_Brussels_{variable}.png')
+    # plt.savefig(file_path)
+
+
+
+
